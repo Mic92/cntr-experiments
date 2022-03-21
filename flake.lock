@@ -1,27 +1,5 @@
 {
   "nodes": {
-    "fenix": {
-      "inputs": {
-        "nixpkgs": [
-          "nixpkgs"
-        ],
-        "rust-analyzer-src": "rust-analyzer-src"
-      },
-      "locked": {
-        "lastModified": 1638426247,
-        "narHash": "sha256-EYiJfv3LaACTMgJa55M0Oluq1Em/eW3BfQr/oYZQP1g=",
-        "owner": "nix-community",
-        "repo": "fenix",
-        "rev": "b3e5ce9985c380c8fe1b9d14879a14b749d1af51",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nix-community",
-        "repo": "fenix",
-        "rev": "b3e5ce9985c380c8fe1b9d14879a14b749d1af51",
-        "type": "github"
-      }
-    },
     "flake-utils": {
       "locked": {
         "lastModified": 1642700792,
@@ -34,29 +12,6 @@
       "original": {
         "owner": "numtide",
         "repo": "flake-utils",
-        "type": "github"
-      }
-    },
-    "microvm": {
-      "inputs": {
-        "flake-utils": [
-          "flake-utils"
-        ],
-        "nixpkgs": [
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1643688782,
-        "narHash": "sha256-7VFuf0qWg8w3zOatvhavnFoO6qnOBV6SNj7oCxbkn2I=",
-        "owner": "Mic92",
-        "repo": "microvm.nix",
-        "rev": "375f443b6a389752906f0fa658a5f924f8673881",
-        "type": "github"
-      },
-      "original": {
-        "owner": "Mic92",
-        "repo": "microvm.nix",
         "type": "github"
       }
     },
@@ -76,46 +31,10 @@
         "type": "github"
       }
     },
-    "not-os": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1630679604,
-        "narHash": "sha256-LuBfCWZpHR4EI5cS9/xo9mRNl4RR4qPGTbTDeRjovTE=",
-        "owner": "cleverca22",
-        "repo": "not-os",
-        "rev": "1b1feb12a44daf57885d3167acd647dea7a1b29f",
-        "type": "github"
-      },
-      "original": {
-        "owner": "cleverca22",
-        "repo": "not-os",
-        "type": "github"
-      }
-    },
     "root": {
       "inputs": {
-        "fenix": "fenix",
         "flake-utils": "flake-utils",
-        "microvm": "microvm",
-        "nixpkgs": "nixpkgs",
-        "not-os": "not-os"
-      }
-    },
-    "rust-analyzer-src": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1638362177,
-        "narHash": "sha256-f502pAc90mJ9WcU7/lv0TfCm22PMtM55Kw4BF4SGjNk=",
-        "owner": "rust-analyzer",
-        "repo": "rust-analyzer",
-        "rev": "4691a0647b2c96cc475d8bbe7c31fe194d1443e7",
-        "type": "github"
-      },
-      "original": {
-        "owner": "rust-analyzer",
-        "ref": "nightly",
-        "repo": "rust-analyzer",
-        "type": "github"
+        "nixpkgs": "nixpkgs"
       }
     }
   },
