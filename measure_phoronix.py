@@ -10,6 +10,7 @@ import phoronix
 import os
 import time
 from functools import partial
+import shutil
 
 from nix import nix_build
 
@@ -150,40 +151,59 @@ def cntr(optimizations: List[str], skip_tests: List[str]) -> pd.DataFrame:
             env[opt] = "1"
         util.run(["sudo", "umount", "-l", str(test_suite)], check=False)
         cntr = [
-            "sudo",
             "cargo",
-            "run",
-            "--bin",
-            "cntrfs-test",
+            "build",
+            "--release",
+        ]
+        cntr_dir = TEST_ROOT.joinpath("cntr")
+        cntr_bin = cntr_dir.joinpath("target", "release", "cntrfs-test")
+        util.run(cntr, cwd=str(cntr_dir))
+        cntr_cmd = [
+            str(cntr_bin),
             str(test_suite),
             str(fuse_mnt),
         ]
-        with subprocess.Popen(cntr, env=env, cwd=TEST_ROOT.joinpath("cntr")) as p:
-            try:
-                prefix = systemd_run(env=cmd.env)
-                breakpoint()
-
-                util.run(
-                    ["sudo"] + prefix + cmd.args,
-                    stdout=None,
-                    stderr=None,
-                    stdin=yes_please(),
-                    # we check at the end if phoronix passed tests when we parse results
-                    check=False,
-                )
-                if not report_path.exists():
-                    raise OSError(f"phoronix did not create a report at {report_path}")
-                return parse_result(report_path, "native")
-            finally:
-                time.sleep(1)
-                print("terminate")
-                p.terminate()
-                p.wait(timeout=1)
-                time.sleep(1)
-                p.kill()
-                p.wait(timeout=1)
-                print("umount")
-                util.run(["sudo", "umount", "-l", str(test_suite)], check=False)
+        #with subprocess.Popen(cntr, env=env) as p:
+        try:
+            prefix = systemd_run(env=cmd.env)
+            paths = map(os.path.dirname, [
+                shutil.which("sleep"),
+                shutil.which("kill"),
+                shutil.which("mountpoint"),
+            ])
+            script = f"""
+export PATH={':'.join(paths)}
+{' '.join(cntr_cmd)}&
+while ! mountpoint -q {fuse_mnt}; do
+  sleep 1;
+done
+pid=$!
+{' '.join(cmd.args)}
+kill $pid
+sleep 1
+kill -9 $pid
+"""
+            util.run(
+                ["sudo"] + prefix + ["sh", "-x", "-c", script],
+                stdout=None,
+                stderr=None,
+                stdin=yes_please(),
+                # we check at the end if phoronix passed tests when we parse results
+                check=False,
+            )
+            if not report_path.exists():
+                raise OSError(f"phoronix did not create a report at {report_path}")
+            return parse_result(report_path, "native")
+        finally:
+            #time.sleep(1)
+            #print("terminate")
+            #p.terminate()
+            #p.wait(timeout=1)
+            #time.sleep(1)
+            #p.kill()
+            #p.wait(timeout=1)
+            print("umount")
+            util.run(["sudo", "umount", "-l", str(test_suite)], check=False)
 
 
 def main() -> None:

@@ -23,6 +23,7 @@ def run(
     stdin: ChildFd = None,
     check: bool = True,
     verbose: bool = True,
+    cwd: Optional[str] = None,
 ) -> "subprocess.CompletedProcess[Text]":
     env = os.environ.copy()
     env.update(extra_env)
@@ -37,4 +38,5 @@ def run(
         text=True,
         input=input,
         stdin=stdin,
+        cwd=cwd
     )
