@@ -137,12 +137,13 @@ def native(skip_tests: List[str]) -> pd.DataFrame:
 
 def cntr(optimizations: List[str], skip_tests: List[str]) -> pd.DataFrame:
     with fresh_fs_ssd():
-        fs_source = util.HOST_DIR_PATH.joinpath("source")
         test_suite = util.HOST_DIR_PATH.joinpath("phoronix-test-suite")
+        fuse_mnt = util.HOST_DIR_PATH.joinpath("fuse")
+        fuse_mnt.mkdir()
         report_path = test_suite.joinpath(REPORT_PATH)
-        cmd = phoronix_command(test_suite, skip_tests)
+        cmd = phoronix_command(fuse_mnt, skip_tests)
         # this is gross but so is phoronix test suite
-        util.run(["sudo"] + link_phoronix_test_suite(test_suite))
+        util.run(["sudo"] + link_phoronix_test_suite(fuse_mnt))
 
         env = os.environ.copy()
         for opt in optimizations:
@@ -154,16 +155,16 @@ def cntr(optimizations: List[str], skip_tests: List[str]) -> pd.DataFrame:
             "run",
             "--bin",
             "cntrfs-test",
-            str(fs_source),
             str(test_suite),
+            str(fuse_mnt),
         ]
         with subprocess.Popen(cntr, env=env, cwd=TEST_ROOT.joinpath("cntr")) as p:
             try:
-                prefix = systemd_run(env=env)
+                prefix = systemd_run(env=cmd.env)
+                breakpoint()
 
                 util.run(
                     ["sudo"] + prefix + cmd.args,
-                    extra_env=cmd.env,
                     stdout=None,
                     stderr=None,
                     stdin=yes_please(),
