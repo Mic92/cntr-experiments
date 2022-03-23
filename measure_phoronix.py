@@ -1,13 +1,19 @@
 from contextlib import contextmanager
 import measure_helpers as util
+from root import TEST_ROOT
 from typing import Iterator, List, Dict, IO, Union
 from pathlib import Path
 from dataclasses import dataclass
 import subprocess
 import pandas as pd
 import phoronix
+import os
+import time
+from functools import partial
 
 from nix import nix_build
+
+STATS_PATH = util.MEASURE_RESULTS.joinpath("phoronix-stats.tsv")
 
 
 @contextmanager
@@ -79,7 +85,7 @@ def link_phoronix_test_suite(test_suite: Path) -> List[str]:
 
 
 def systemd_run(
-    cpus: int = 4, memory_gigabytes: int = 8, env: Dict[str, str] = {}
+    cpus: int = 4, memory_gigabytes: int = 16, env: Dict[str, str] = {}
 ) -> List[str]:
     """
     Since we limit memory inside our VM we also limit the number of CPUs for the benchmark
@@ -129,44 +135,84 @@ def native(skip_tests: List[str]) -> pd.DataFrame:
         return parse_result(report_path, "native")
 
 
-def cntr(skip_tests: List[str]) -> pd.DataFrame:
+def cntr(optimizations: List[str], skip_tests: List[str]) -> pd.DataFrame:
     with fresh_fs_ssd():
+        fs_source = util.HOST_DIR_PATH.joinpath("source")
         test_suite = util.HOST_DIR_PATH.joinpath("phoronix-test-suite")
         report_path = test_suite.joinpath(REPORT_PATH)
         cmd = phoronix_command(test_suite, skip_tests)
         # this is gross but so is phoronix test suite
         util.run(["sudo"] + link_phoronix_test_suite(test_suite))
-        prefix = systemd_run(env=cmd.env)
 
-        util.run(
-            ["sudo"] + prefix + cmd.args,
-            extra_env=cmd.env,
-            stdout=None,
-            stderr=None,
-            stdin=yes_please(),
-            # we check at the end if phoronix passed tests when we parse results
-            check=False,
-        )
-        if not report_path.exists():
-            raise OSError(f"phoronix did not create a report at {report_path}")
-        return parse_result(report_path, "native")
+        env = os.environ.copy()
+        for opt in optimizations:
+            env[opt] = "1"
+        util.run(["sudo", "umount", "-l", str(test_suite)], check=False)
+        cntr = [
+            "sudo",
+            "cargo",
+            "run",
+            "--bin",
+            "cntrfs-test",
+            str(fs_source),
+            str(test_suite),
+        ]
+        with subprocess.Popen(cntr, env=env, cwd=TEST_ROOT.joinpath("cntr")) as p:
+            try:
+                prefix = systemd_run(env=env)
 
-
-STATS_PATH = util.MEASURE_RESULTS.joinpath("phoronix-stats.tsv")
+                util.run(
+                    ["sudo"] + prefix + cmd.args,
+                    extra_env=cmd.env,
+                    stdout=None,
+                    stderr=None,
+                    stdin=yes_please(),
+                    # we check at the end if phoronix passed tests when we parse results
+                    check=False,
+                )
+                if not report_path.exists():
+                    raise OSError(f"phoronix did not create a report at {report_path}")
+                return parse_result(report_path, "native")
+            finally:
+                time.sleep(1)
+                print("terminate")
+                p.terminate()
+                p.wait(timeout=1)
+                time.sleep(1)
+                p.kill()
+                p.wait(timeout=1)
+                print("umount")
+                util.run(["sudo", "umount", "-l", str(test_suite)], check=False)
 
 
 def main() -> None:
     util.check_ssd()
     util.check_intel_turbo()
-    benchmarks = [("native", native), ("cntr", cntr)]
+    all = set(
+        [
+            "SPLICE_READ",
+            "SPLICE_WRITE",
+            "FOPEN_KEEPCACHE",
+            "WRITEBACK_CACHE",
+            "PARALLEL_DIROPS",
+        ]
+    )
+
+    benchmarks = [
+        ("cntr-nosplice", partial(cntr, all - set(["SPLICE_READ", "SPLICE_WRITE"]))),
+        ("cntr-nofopen-keepcache", partial(cntr, all - set(["FOPEN_KEEPCACHE"]))),
+        ("cntr-nowriteback-cache", partial(cntr, all - set(["WRITEBACK_CACHE"]))),
+        ("cntr-noparallel-dirops", partial(cntr, all - set(["PARALLEL_DIROPS"]))),
+        ("cntr", partial(cntr, all)),
+    ]
     df = None
     if STATS_PATH.exists():
         df = pd.read_csv(STATS_PATH, sep="\t")
 
     for name, benchmark in benchmarks:
         # Useful for testing
-        # skip_tests = "fio,sqlite,dbench,ior,compilebench,postmark".split(",")
-        skip_tests = []
+        skip_tests = "fio,sqlite,dbench,ior,compilebench,postmark".split(",")
+        #skip_tests = []
         if df is not None:
             skip_tests = list(df[df.identifier == name].benchmark_name.unique())
             if len(skip_tests) == 7:
