@@ -136,7 +136,7 @@ def native(skip_tests: List[str]) -> pd.DataFrame:
         return parse_result(report_path, "native")
 
 
-def cntr(optimizations: List[str], skip_tests: List[str]) -> pd.DataFrame:
+def cntr(optimizations: List[str], name: str, skip_tests: List[str]) -> pd.DataFrame:
     with fresh_fs_ssd():
         test_suite = util.HOST_DIR_PATH.joinpath("phoronix-test-suite")
         fuse_mnt = util.HOST_DIR_PATH.joinpath("fuse")
@@ -146,9 +146,6 @@ def cntr(optimizations: List[str], skip_tests: List[str]) -> pd.DataFrame:
         # this is gross but so is phoronix test suite
         util.run(["sudo"] + link_phoronix_test_suite(fuse_mnt))
 
-        env = os.environ.copy()
-        for opt in optimizations:
-            env[opt] = "1"
         util.run(["sudo", "umount", "-l", str(test_suite)], check=False)
         cntr = [
             "cargo",
@@ -163,25 +160,24 @@ def cntr(optimizations: List[str], skip_tests: List[str]) -> pd.DataFrame:
             str(test_suite),
             str(fuse_mnt),
         ]
-        #with subprocess.Popen(cntr, env=env) as p:
+        env = cmd.env.copy()
+        for opt in optimizations:
+            env[opt] = "1"
+        paths = map(os.path.dirname, [
+            shutil.which("sleep"),
+            shutil.which("kill"),
+            shutil.which("mountpoint"),
+        ])
+        env["PATH"] = ':'.join(paths)
         try:
-            prefix = systemd_run(env=cmd.env)
-            paths = map(os.path.dirname, [
-                shutil.which("sleep"),
-                shutil.which("kill"),
-                shutil.which("mountpoint"),
-            ])
+            prefix = systemd_run(env=env)
+            # Super hässlich!
             script = f"""
-export PATH={':'.join(paths)}
-{' '.join(cntr_cmd)}&
+{' '.join(cntr_cmd)}
 while ! mountpoint -q {fuse_mnt}; do
   sleep 1;
 done
-pid=$!
 {' '.join(cmd.args)}
-kill $pid
-sleep 1
-kill -9 $pid
 """
             util.run(
                 ["sudo"] + prefix + ["sh", "-x", "-c", script],
@@ -193,7 +189,7 @@ kill -9 $pid
             )
             if not report_path.exists():
                 raise OSError(f"phoronix did not create a report at {report_path}")
-            return parse_result(report_path, "native")
+            return parse_result(report_path, name)
         finally:
             #time.sleep(1)
             #print("terminate")
@@ -203,7 +199,7 @@ kill -9 $pid
             #p.kill()
             #p.wait(timeout=1)
             print("umount")
-            util.run(["sudo", "umount", "-l", str(test_suite)], check=False)
+            util.run(["sudo", "umount", "-l", str(fuse_mnt)], check=False)
 
 
 def main() -> None:
@@ -232,14 +228,15 @@ def main() -> None:
 
     for name, benchmark in benchmarks:
         # Useful for testing
-        skip_tests = "fio,sqlite,dbench,ior,compilebench,postmark".split(",")
+        #skip_tests = "fio,sqlite,dbench,ior,compilebench,postmark".split(",")
+        skip_tests = "sqlite,dbench,ior,compilebench,postmark,fio".split(",")
         #skip_tests = []
-        if df is not None:
-            skip_tests = list(df[df.identifier == name].benchmark_name.unique())
-            if len(skip_tests) == 7:
-                # result of len(df.benchmark_name.unique())
-                continue
-        new_df = benchmark(skip_tests)
+        #if df is not None:
+        #    skip_tests = list(df[df.identifier == name].benchmark_name.unique())
+        #    if len(skip_tests) == 7:
+        #        # result of len(df.benchmark_name.unique())
+        #        continue
+        new_df = benchmark(name, skip_tests)
         if df is not None:
             df = pd.concat([df, new_df])
         else:
