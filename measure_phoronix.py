@@ -209,7 +209,8 @@ def main() -> None:
     all = set(
         [
             "SPLICE_READ",
-            "SPLICE_WRITE",
+            # does not work anymore...
+            #"SPLICE_WRITE",
             "FOPEN_KEEPCACHE",
             "WRITEBACK_CACHE",
             "PARALLEL_DIROPS",
@@ -217,7 +218,7 @@ def main() -> None:
     )
 
     benchmarks = [
-        ("cntr-nosplice", partial(cntr, all - set(["SPLICE_READ", "SPLICE_WRITE"]))),
+        ("cntr-nosplice", partial(cntr, all - set(["SPLICE_READ"]))),
         ("cntr-nofopen-keepcache", partial(cntr, all - set(["FOPEN_KEEPCACHE"]))),
         ("cntr-nowriteback-cache", partial(cntr, all - set(["WRITEBACK_CACHE"]))),
         ("cntr-noparallel-dirops", partial(cntr, all - set(["PARALLEL_DIROPS"]))),
