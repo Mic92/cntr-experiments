@@ -146,6 +146,7 @@ def cntr(optimizations: List[str], name: str, skip_tests: List[str]) -> pd.DataF
         # this is gross but so is phoronix test suite
         util.run(["sudo"] + link_phoronix_test_suite(fuse_mnt))
 
+        util.run(["sudo", "umount", "-l", str(fuse_mnt)], check=False)
         util.run(["sudo", "umount", "-l", str(test_suite)], check=False)
         cntr = [
             "cargo",
