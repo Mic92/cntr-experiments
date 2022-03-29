@@ -231,13 +231,13 @@ def main() -> None:
     for name, benchmark in benchmarks:
         # Useful for testing
         #skip_tests = "fio,sqlite,dbench,ior,compilebench,postmark".split(",")
-        skip_tests = "sqlite,dbench,ior,compilebench,postmark,fio".split(",")
+        #skip_tests = "sqlite,dbench,ior,compilebench,postmark,fio".split(",")
         #skip_tests = []
-        #if df is not None:
-        #    skip_tests = list(df[df.identifier == name].benchmark_name.unique())
-        #    if len(skip_tests) == 7:
-        #        # result of len(df.benchmark_name.unique())
-        #        continue
+        if df is not None:
+            skip_tests = list(df[df.identifier == name].benchmark_name.unique())
+            if len(skip_tests) == 7:
+                # result of len(df.benchmark_name.unique())
+                continue
         new_df = benchmark(name, skip_tests)
         if df is not None:
             df = pd.concat([df, new_df])
