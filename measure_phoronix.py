@@ -232,7 +232,7 @@ def main() -> None:
         # Useful for testing
         #skip_tests = "fio,sqlite,dbench,ior,compilebench,postmark".split(",")
         #skip_tests = "sqlite,dbench,ior,compilebench,postmark,fio".split(",")
-        #skip_tests = []
+        skip_tests = []
         if df is not None:
             skip_tests = list(df[df.identifier == name].benchmark_name.unique())
             if len(skip_tests) == 7:
