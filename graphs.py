@@ -3,6 +3,7 @@
 import pandas as pd
 import re
 import sys
+import numpy as np
 from pathlib import Path
 from typing import Any
 from natsort import natsort_keygen
@@ -147,31 +148,34 @@ def system_to_iotype(df: pd.DataFrame, value: str) -> pd.DataFrame:
 def compute_ratio(x: pd.DataFrame) -> pd.Series:
     title = x.benchmark_title.iloc[0]
     scale = x.scale.iloc[0]
-    native = x.value.iloc[0]
-    if len(x.value) == 2:
-        vmsh = x.value.iloc[1]
-    else:
-        print(f"WARNING: found only values for {title} for {x.identifier.iloc[0]}")
-        # FIXME
-        import math
+    x.median = x.raw_string.map(lambda v: np.median(list(map(float, v.split(":")))))
 
-        vmsh = math.nan
+    cntr_idx = -1
+    for i, name in enumerate(x.identifier):
+        if name == "cntr":
+            cntr_idx = i
+            break
+    if cntr_idx == -1:
+        raise Exception(f"no cntr for benchmark {title}")
+    native = x.median.iloc[cntr_idx]
+
     if x.proportion.iloc[0] == "LIB":
-        diff = vmsh / native
+        diff = x.median / native
         proportion = "lower is better"
     else:
-        diff = native / vmsh
+        diff = native / x.median
         proportion = "higher is better"
 
+    llen = len(x.median)
     result = dict(
-        title=x.title.iloc[0],
-        benchmark_title=title,
-        benchmark_group=x.benchmark_name,
-        diff=diff,
-        native=native,
-        vmsh=vmsh,
-        scale=scale,
-        proportion=proportion,
+        identifier=list(x.identifier),
+        title=[x.title.iloc[0]] * llen,
+        benchmark_title=[title] * llen,
+        benchmark_group=[x.benchmark_name] * llen,
+        diff=list(diff),
+        median=list(x.median),
+        scale=x.scale,
+        proportion=[proportion] * llen,
     )
     return pd.Series(result, name="metrics")
 
@@ -209,21 +213,34 @@ def bar_colors(graph: Any, df: pd.Series, num_colors: int) -> None:
 
 
 def phoronix(df: pd.DataFrame) -> Any:
-    df = df[df["identifier"].isin(["vmsh-blk", "qemu-blk"])]
+    #df = df[df["identifier"].isin(["vmsh-blk", "qemu-blk"])]
     groups = len(df.benchmark_name.unique())
     # same benchmark with different units
     df = df[~((df.benchmark_name.str.startswith("pts/fio")) & (df.scale == "MB/s"))]
     df = df.sort_values(by=["benchmark_id", "identifier"], key=sort_row)
     df = df.groupby("benchmark_id").apply(compute_ratio).reset_index()
+    columns = [
+        "identifier",
+        "title",
+        "benchmark_title",
+        "benchmark_group",
+        "diff",
+        "median",
+        "scale",
+        "proportion"
+    ]
+    df = df.explode(columns)
+    df = df[df.identifier != "cntr"]
     df = df.sort_values(by=["benchmark_id"], key=sort_row)
     g = catplot(
         data=apply_aliases(df),
         y=column_alias("benchmark_id"),
         x=column_alias("diff"),
+        hue=column_alias("identifier"),
         kind="bar",
         palette=None,
     )
-    bar_colors(g, df.benchmark_group, groups)
+    #bar_colors(g, df.benchmark_group, groups)
     g.ax.set_xlabel("")
     g.ax.set_ylabel("")
     FONT_SIZE = 9
@@ -250,90 +267,6 @@ def phoronix(df: pd.DataFrame) -> Any:
         xy=(1.1, -0.2),
         fontsize=FONT_SIZE,
     )
-    return g
-
-
-def fio_overhead(df: pd.DataFrame, what: str, value_name: str) -> Any:
-    df = df[df["benchmark"] == what]
-    df = df.melt(
-        id_vars=["system", "benchmark", "Unnamed: 0", "write_stddev", "read_stddev"],
-        var_name="direction",
-        value_name=value_name,
-    )
-    df = gobshit_to_stddev(df)
-    df = system_to_iotype(df, value_name)
-    warnings.simplefilter("ignore")
-    fr = df[df.iotype == "file"][df.direction == "read_mean"]
-    fw = df[df.iotype == "file"][df.direction == "write_mean"]
-    dr = df[df.iotype == "direct"][df.direction == "read_mean"]
-    dw = df[df.iotype == "direct"][df.direction == "write_mean"]
-    warnings.simplefilter("default")
-
-    def foo(g: pd.DataFrame, system: str) -> pd.DataFrame:
-        df = pd.DataFrame()
-        mean = float(g[g.system == system][value_name])
-        stddev = float(g[g.system == system]["stddev"])
-
-        def f(row: pd.DataFrame) -> pd.DataFrame:
-            # row["stddev"] /= row[value_name]
-            # if str(row.system) != system:
-            #    from math import sqrt
-            #    row["stddev"] = sqrt(pow(row["stddev"], 2) * pow(stddev/mean, 2))
-            #    row["stddev"] *= stddev/mean
-            # row[value_name] /= mean
-            #
-            # i dont think there actually exsists a stddev of this:
-            # https://en.wikipedia.org/wiki/Ratio_distribution#Uncorrelated_central_normal_ratio
-            row["stddev"] /= row[value_name]
-            if str(row.system) != system:
-                row["stddev"] += stddev / mean
-            row[value_name] = mean / row[value_name]
-            row["stddev"] *= row[value_name]
-            #
-            # first try:
-            # row[value_name] /= mean
-            # row["stddev"] += stddev
-            # row["stddev"] /= mean
-            return row
-
-        g = g.apply(f, axis=1)
-        df = df.append(g)
-        return df
-
-    fr = foo(fr, "detached_qemublk")
-    fw = foo(fw, "detached_qemublk")
-    dr = foo(dr, "direct_detached_qemublk")
-    dw = foo(dw, "direct_detached_qemublk")
-    df = pd.concat([dr, fr, dw, fw], sort=True)  # TODO fix sorting
-    df = stddev_to_series(df, value_name, "stddev")
-    directs = sum([int(t == "direct") for t in df["iotype"]])
-    files = sum([int(t == "file") for t in df["iotype"]])
-    g = catplot(
-        data=apply_aliases(df),
-        y=column_alias("system"),
-        # order=systems_order(df),
-        x=column_alias(value_name),
-        hue=column_alias("direction"),
-        kind="bar",
-        ci="sd",  # show standard deviation! otherwise with_stddev_to_long_form does not work.
-        height=2.3,
-        aspect=2,
-        # color=color,
-        palette=None,
-        legend=False,
-        row="iotype",
-        sharex=False,
-        sharey=False,
-        facet_kws=dict({"gridspec_kws": {"height_ratios": [directs, files]}}),
-    )
-    g.axes[0][0].legend(
-        loc="upper right", frameon=True, title=column_alias("direction")
-    )
-    g.axes[1][0].set_xlabel("Overhead: " + g.axes[1][0].get_xlabel())
-    g.axes[0][0].set_ylabel("")
-    g.axes[1][0].set_ylabel("")
-    g.axes[0][0].grid()
-    g.axes[1][0].grid()
     return g
 
 
