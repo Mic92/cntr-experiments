@@ -203,6 +203,8 @@ def phoronix(df: pd.DataFrame) -> Any:
         hue=column_alias("identifier"),
         kind="bar",
         palette=None,
+        aspect=0.7,
+        height=12,
     )
     #bar_colors(g, df.benchmark_group, groups)
     g.ax.set_xlabel("")
