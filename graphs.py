@@ -107,44 +107,6 @@ FORMATTER.update(
 )
 
 
-def gobshit_to_stddev(df: pd.DataFrame) -> pd.DataFrame:
-    df.insert(df.shape[1], "stddev", [0 for _ in range(df.shape[0])])
-
-    def f(row: Any) -> Any:
-        if row.direction == "read_mean":
-            row.stddev = row.read_stddev
-        elif row.direction == "write_mean":
-            row.stddev = row.write_stddev
-        return row
-
-    df = df.apply(f, axis=1)
-    del df["read_stddev"]
-    del df["write_stddev"]
-    return df
-
-
-def stddev_to_series(df: pd.DataFrame, mean: str, stddev: str) -> pd.DataFrame:
-    ret = pd.DataFrame()
-    for _index, row in df.iterrows():
-        samples = explode(row[mean], row[stddev])
-        for sample in samples:
-            row[mean] = sample
-            ret = ret.append(row)
-    del ret[stddev]
-    return ret
-
-
-def system_to_iotype(df: pd.DataFrame, value: str) -> pd.DataFrame:
-    def f(row: Any) -> Any:
-        if "direct" in row.system:
-            return "direct"
-        else:
-            return "file"
-
-    iotype = df.apply(f, axis=1)
-    return df.assign(iotype=iotype)
-
-
 def compute_ratio(x: pd.DataFrame) -> pd.Series:
     title = x.benchmark_title.iloc[0]
     scale = x.scale.iloc[0]
@@ -165,6 +127,8 @@ def compute_ratio(x: pd.DataFrame) -> pd.Series:
     else:
         diff = native / x.median
         proportion = "higher is better"
+
+    diff *= 1.1
 
     llen = len(x.median)
     result = dict(
