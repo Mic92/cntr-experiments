@@ -87,13 +87,19 @@ ROW_ALIASES.update(
     }
 )
 
-ROW_ALIASES["system"]["vmsh-console"] = "vmsh-console"
+ROW_ALIASES["identifier"] = {
+    "cntr-nofopen-keepcache": "Read cache",
+    "cntr-noparallel-dirops": "Batching",
+    "cntr-nosplice": "Splice read",
+    "cntr-nowriteback-cache": "Writeback cache",
+}
 
 COLUMN_ALIASES.update(
     {
         "container_size": "image size [MB]",
         "iops": "IOPS [k]",
         "io_throughput": "Throughput [GB/s]",
+        "identifier": "Optimization disabled",
         "direction": "Direction",
         "seconds": "latency [ms]",
     }
@@ -177,7 +183,7 @@ def bar_colors(graph: Any, df: pd.Series, num_colors: int) -> None:
 
 
 def phoronix(df: pd.DataFrame) -> Any:
-    #df = df[df["identifier"].isin(["vmsh-blk", "qemu-blk"])]
+    # df = df[df["identifier"].isin(["vmsh-blk", "qemu-blk"])]
     groups = len(df.benchmark_name.unique())
     # same benchmark with different units
     df = df[~((df.benchmark_name.str.startswith("pts/fio")) & (df.scale == "MB/s"))]
@@ -191,7 +197,7 @@ def phoronix(df: pd.DataFrame) -> Any:
         "diff",
         "median",
         "scale",
-        "proportion"
+        "proportion",
     ]
     df = df.explode(columns)
     df = df[df.identifier != "cntr"]
@@ -204,9 +210,9 @@ def phoronix(df: pd.DataFrame) -> Any:
         kind="bar",
         palette=None,
         aspect=0.7,
-        height=12,
+        height=8,
     )
-    #bar_colors(g, df.benchmark_group, groups)
+    # bar_colors(g, df.benchmark_group, groups)
     g.ax.set_xlabel("")
     g.ax.set_ylabel("")
     FONT_SIZE = 9
@@ -230,7 +236,7 @@ def phoronix(df: pd.DataFrame) -> Any:
     g.ax.axvline(x=1, color="gray", linestyle=":")
     g.ax.annotate(
         "baseline",
-        xy=(1.1, -0.2),
+        xy=(1.02, -0.7),
         fontsize=FONT_SIZE,
     )
     return g
